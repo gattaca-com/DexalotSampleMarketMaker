@@ -16,7 +16,7 @@
 - ~~Get Reference Data from the RESTAPI (contract addresses, pairs, trade increments, min, max trade amount) **(20 points)**~~
 - Enter a BUY & a SELL order with a predefined spread around a given mid price or last price against the contracts. (Keep orders in an internal map). **(20 points)**
 - Shut down your market maker manually.
-- Restart your market maker &  Get your open orders from RESTAPI at startup. **(20 points)**
+~~- Restart your market maker &  Get your open orders from RESTAPI at startup. **(20 points)**~~
 - Wait ~10 seconds and Cancel Buy & Sell your previously opened orders. if you can foresee & mitigate a potential issue in the previous step. (mitigating code to be submitted in an email). **(5 points)**
 - Wait ~20 seconds and enter a new set of buy & sell orders  with different prices based on the changing mid/last price  against the contracts. **(20 points)**
 - Wait ~30 seconds and CancelAll all your open orders using CancelAll against the contracts. **(15 points)**

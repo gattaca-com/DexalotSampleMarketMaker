@@ -16,10 +16,12 @@ class Dexalot:
     # Base URL
     # https://api.dexalot-dev.com/api/
 
-    def __init__(self, base_url: str, pair: str, web3: Web3, timeout=None):
+    def __init__(self, base_url: str, pair: str, web3: Web3, trader_address, timeout=None):
 
         self.base_url = base_url
         self.pair = pair
+        self.web3 = web3
+        self.trade_address = trader_address
         self.base_symbol = None
         self.quote_symbol = None
         self.base_display_decimals = None
@@ -30,7 +32,6 @@ class Dexalot:
         self.max_trade_amount = None
         self.base_decimals = None
         self.quote_decimals = None
-        self.web3 = web3
         self.exchange_contract = None
         self.portfolio_contract = None
         self.trade_pairs_contract = None
@@ -70,13 +71,14 @@ class Dexalot:
         # self.orderbooks_contract = self.web3.eth.contract(address=contract_info["address"], abi=contract_info["abi"]["abi"])
         # logger.info("All contracts have been initialized and ready to trade")
 
+    # TODO: This needs polishing up
     async def event_loop(self, event_filter, poll_interval):
         while True:
             for OrderStatusChanged in event_filter.get_new_entries():
                 print(OrderStatusChanged)
-                print(Web3.toJSON(OrderStatusChanged))
                 await asyncio.sleep(poll_interval)
 
+    # TODO: This needs polishing up
     def event_listener(self):
 
         event_filter = self.trade_pairs_contract.events.OrderStatusChanged.createFilter(fromBlock='latest')
@@ -133,7 +135,19 @@ class Dexalot:
 
         return response
 
-    def place_order(self, trade_pair_id, price: Decimal, quantity: Decimal, side: OrderSide, type: OrderType):
+    def fetch_open_orders(self) -> list:
+
+        # https://api.dexalot-dev.com/api/trading/openorders
+        path = "trading/openorders/params"
+        params = {'traderaddress': self.trade_address, 'pair': self.pair}
+        response = self._curl_dexalot(path=path, params=params)
+        logger.info(f"Returned {response['count']} Open Trades")
+        return response['rows']
+
+    def fetch_orderbook(self):
+        pass
+
+    def place_order(self, trade_pair_id, price: Decimal, quantity: Decimal, order_side: OrderSide, order_type: OrderType):
 
         if (quantity < self.min_trade_amount) or (quantity > self.max_trade_amount):
             logger.info(f"Order size {quantity:.3f} must be between {self.min_trade_amount} and {self.max_trade_amount}")
@@ -141,27 +155,14 @@ class Dexalot:
 
         price_norm = int(round(price, self.quote_display_decimals)*10**self.quote_decimals)
         quantity_norm = int(round(quantity, self.base_display_decimals)*10**self.base_decimals)
-        order_txn = self.trade_pairs_contract.functions.addOrder(trade_pair_id, price_norm, quantity_norm, side, type).transact()
-        order_receipt = web3.eth.getTransactionReceipt(order_txn)
-        print(order_receipt)
-        return order_receipt
+        order_txn = self.trade_pairs_contract.functions.addOrder(trade_pair_id, price_norm, quantity_norm, order_side.value, order_type.value).transact()
+        logger.info(f"Placed {repr(order_type)} {repr(order_side)} Order. Price {price:.4f}. Size {amount:.4f} {self.quote_symbol}")
+        return order_txn
 
-    def fetch_open_orders(self, trader_address: str):
-
-        trader_address = web3.utils.toChecksumAddress(trader_address)
-        # https://api.dexalot.com/api/trading/openorders/params?traderaddress=0xeB45E8926896CEd4e1de1b5617A6cA32DeDC15d2&itemsperpage=50&pageno=1
-        open_orders = None
-        return open_orders
-
-    def fetch_orders(self, trader_address: str):
-
-        trader_address = web3.utils.toChecksumAddress(trader_address)
-        # https://api.dexalot.com/api/trading/orders/params?traderaddress=0xeB45E8926896CEd4e1de1b5617A6cA32DeDC15d2&itemsperpage=50&pageno=1
-        orders = None
-        return orders
-
-    def fetch_orderbook(self):
-        pass
+    def cancel_order(self, trade_pair_id, order_id):
+        print(str.encode(trade_pair_id), str.encode(order_id))
+        self.trade_pairs_contract.functions.cancelOrder(str.encode(trade_pair_id), str.encode(order_id)).transact()
+        logger.info(f"Cancelled {order_id}")
 
     def _curl_dexalot(self, path, query=None, params=None, timeout=None, max_retries=None):
 
@@ -176,9 +177,8 @@ class Dexalot:
                 raise Exception("Max retries on %s (%s) hit, raising." % (path, json.dumps(params or '')))
             return self._curl_dexalot(path, query, params, timeout, max_retries)
 
-        response = None
         try:
-            response = requests.get(url, params=params)
+            response = requests.get(url=url, params=params)
         except requests.exceptions.Timeout as e:
             logger.warning("Timed out on request: %s (%s), retrying..." % (path, json.dumps(params or '')))
             return retry()
@@ -192,28 +192,35 @@ if __name__ == "__main__":
 
     pair = config['trade_pair']
     web3 = config['web3']
+    trader_address = config['trader_address']
 
     base_url = "https://api.dexalot-dev.com/api/"
-    exchange_handler = Dexalot(base_url, pair=pair, web3=web3, timeout=None)
+    exchange_handler = Dexalot(base_url, pair=pair, web3=web3, trader_address=trader_address, timeout=None)
 
     exchange_handler.initialize()
 
-    # tokens = exchange_handler.fetch_tokens()
-    # print(tokens)
-    # pairs = exchange_handler.fetch_all_pairs()
-    # print(pairs)
-    price = Decimal(419.0000)
-    amount = Decimal(0.35)
+    start_mid = 100
+    spread = 1
 
-    # displaydecimals
-    # ': 1, '
-    # quotedisplaydecimals
-    # ': 4
-    #
+    buy_price = Decimal(start_mid - (spread / 2))
+    sell_price = Decimal(start_mid + spread / 2)
+    amount = Decimal(0.3)
 
-    #order = exchange_handler.place_order(b"TEAM2/AVAX", price, amount, OrderSide.BUY, OrderType.LIMIT)
+    # order = exchange_handler.place_order(b"TEAM2/AVAX", buy_price, amount, OrderSide.BUY, OrderType.LIMIT)
+    # order = exchange_handler.place_order(b"TEAM2/AVAX", sell_price, amount, OrderSide.SELL, OrderType.LIMIT)
 
-    exchange_handler.event_listener()
+    # TODO: These trades need to be added to a local hashmap
+    open_orders = exchange_handler.fetch_open_orders()
+    log_line = '\n'
+    for order in open_orders:
+        log_line += str(order) + '\n'
+    logger.info(log_line)
+
+    # Cancel Open Orders
+    for order in open_orders:
+        exchange_handler.cancel_order(trade_pair_id=order['pair'], order_id=order['id'])
+
+    # exchange_handler.event_listener()
 
     # exchange_contract = exchange_handler.fetch_contract_and_abi("Exchange")
     # print(exchange_contract)
