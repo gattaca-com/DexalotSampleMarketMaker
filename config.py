@@ -21,21 +21,28 @@ def extract_environment_variable(var):
 def init_config():
     config = {}
 
-    ulr_devnet = "https://node.dexalot-dev.com/ext/bc/C/rpc"
+    ulr_devnet = 'https://node.dexalot-dev.com/ext/bc/C/rpc'
     web3 = Web3(HTTPProvider(ulr_devnet))
     web3.middleware_onion.inject(geth_poa_middleware, layer=0)
 
     private_key = extract_environment_variable('PRIVATE_KEY')
     register_private_key(web3, private_key)
+
+    # Web3 Config
     config['trader_address'] = web3.eth.default_account
-
-    print(config['trader_address'])
-
     config['web3'] = web3
 
+    # Exchange Handler Config
+    config['base_url'] = 'https://api.dexalot-dev.com/api/'
+    config['timeout'] = 10
     config['trade_pair'] = 'TEAM2/AVAX'
 
     # MM Config
-    config['spread'] = 10.0
+    config['default_mid_price'] = 20            # Default mid price if no market
+    config['existing_order_tolerance'] = 0.1    # Tolerance when comparing orders (10% = 0.1)
+    config['default_amount'] = 5.1
+    config['spread'] = 1
+    config['n_price_levels'] = 5
+    config['n_agg_orders'] = 50
 
     return config
