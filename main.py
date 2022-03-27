@@ -9,4 +9,4 @@ if __name__ == "__main__":
     config = init_config()
 
     dexalot_mm = MarketMaker(config)
-    dexalot_mm.start()
+    dexalot_mm.run()

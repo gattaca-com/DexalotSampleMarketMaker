@@ -39,10 +39,12 @@ def init_config():
 
     # MM Config
     config['default_mid_price'] = 20            # Default mid price if no market
-    config['existing_order_tolerance'] = 0.1    # Tolerance when comparing orders (10% = 0.1)
-    config['default_amount'] = 5.1
-    config['spread'] = 1
+    config['order_price_tolerance'] = 0.005     # Tolerance when comparing order prices (0.5% = 0.005) used to decrease fees moving orders each time best bid/ask move
+    config['order_amount_tolerance'] = 0.2      # Tolernace when comparing order amounts (20% = 0.2). Order size is replensished when order falls below this threshold
+    config['default_amount'] = 5
+    config['target_spread'] = 1                 # Target spread - can vary slightly due to the existing order tolerance
     config['n_price_levels'] = 5
     config['n_agg_orders'] = 50
+    config['update_order_frequency'] = 10       # How often to update the state and orders in seconds
 
     return config

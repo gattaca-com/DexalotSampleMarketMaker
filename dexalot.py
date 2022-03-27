@@ -71,24 +71,6 @@ class Dexalot:
         self.orderbooks_contract = self.web3.eth.contract(address=contract_info["address"], abi=contract_info["abi"]["abi"])
         logger.info("All contracts have been initialized and ready to trade")
 
-    # TODO: This needs polishing up
-    async def event_loop(self, event_filter, poll_interval):
-        while True:
-            for OrderStatusChanged in event_filter.get_new_entries():
-                print(OrderStatusChanged)
-                await asyncio.sleep(poll_interval)
-
-    # TODO: This needs polishing up
-    def event_listener(self):
-
-        event_filter = self.trade_pairs_contract.events.OrderStatusChanged.createFilter(fromBlock='latest')
-        loop = asyncio.get_event_loop()
-
-        try:
-            loop.run_until_complete(asyncio.gather(self.event_loop(event_filter, 2)))
-        finally:
-            loop.close()
-
     def fetch_tokens(self) -> list:
 
         # https://api.dexalot-dev.com/api/trading/pairs
@@ -141,7 +123,6 @@ class Dexalot:
         path = "trading/openorders/params"
         params = {'traderaddress': self.trade_address, 'pair': self.trade_pair}
         response = self._request_dexalot(path=path, params=params)
-        logger.info(f"Returned {response['count']} Open Trades")
         return response['rows']
 
     def fetch_order_status(self, order_id):

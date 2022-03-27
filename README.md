@@ -15,7 +15,7 @@
 
 ~~- Get Reference Data from the RESTAPI (contract addresses, pairs, trade increments, min, max trade amount) **(20 points)**~~
 ~~- Enter a BUY & a SELL order with a predefined spread around a given mid price or last price against the contracts. (Keep orders in an internal map). **(20 points)**~~
-- Shut down your market maker manually.
+~~- Shut down your market maker manually.~~
 ~~- Restart your market maker &  Get your open orders from RESTAPI at startup. **(20 points)**~~
 ~~- Wait ~10 seconds and Cancel Buy & Sell your previously opened orders. if you can foresee & mitigate a potential issue in the previous step. (mitigating code to be submitted in an email). **(5 points)**~~
 ~~- Wait ~20 seconds and enter a new set of buy & sell orders  with different prices based on the changing mid/last price  against the contracts. **(20 points)**~~
@@ -23,7 +23,7 @@
 
 Bonus:
 
-- Listen to OrderUpdate Events. We will enter an order that will fill one of your orders and your code have to react by entering a new order in about ~10 seconds after the fill. **(10 points)**
+~~- Listen to OrderUpdate Events. We will enter an order that will fill one of your orders and your code have to react by entering a new order in about ~10 seconds after the fill. **(10 points)**~~
 - Listen to Executed Events and react to it as above. **(10 points)**
 ~~- Read the orderbook from the contracts and console.log it. **(10 points)**~~
 - Deposit tokens into Dexalot Portfolio programmatically. **(5 points)** 

@@ -11,6 +11,7 @@ class GTCEnum(Enum):
 
 
 class OrderStatus(GTCEnum):
+    NEW = 0
     REJECTED = 1
     PARTIAL = 2
     FILLED = 3
