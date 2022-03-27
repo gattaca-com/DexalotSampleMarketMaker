@@ -160,16 +160,6 @@ class MarketMaker:
         log_line += f"Mid Price {self.mid_price} {self.dexalot.quote_symbol}" + '\n' + 50 * '-'
         logger.info(log_line)
 
-    async def run_additional_state_update(self):
-        while True:
-            # Update the market state and then our orders
-            await asyncio.sleep(self.additional_state_update)
-            try:
-                self.update_state()
-                self.update_orders()
-            except Exception as e:
-                logger.error(f"Could not update orders due to: {e}")
-
     def handle_order_status_changed(self, order_status_changed):
 
         pair = Web3.toText(order_status_changed.args.pair).split(str(b'\x00', 'utf8'))[0]
@@ -245,16 +235,18 @@ class MarketMaker:
         Executed events could be used to determine useful features such as order aggressor that can be used to adjust skew/spread"""
 
         pair = Web3.toText(executed.args.pair).split(str(b'\x00', 'utf8'))[0]
-        maker = executed.args.maker.hex()
-        taker = executed.args.taker.hex()
-        price = Decimal(executed.args.price) / 10 ** self.dexalot.quote_decimals
-        amount = Decimal(executed.args.quantity) / 10 ** self.dexalot.base_decimals
-        fee_maker = Decimal(executed.args.feeMaker) / 10 ** self.dexalot.quote_decimals
-        fee_taker = Decimal(executed.args.feeTaker) / 10 ** self.dexalot.quote_decimals
 
-        log_line = f"EXECUTED on {pair}. Price: {price} {self.dexalot.quote_symbol}. Amount: {amount} {self.dexalot.base_symbol}." + '\n'
-        log_line += f"Maker: {maker} (fee paid: {fee_maker}). Taker: {taker} (fee_paid: {fee_taker})"
-        logger.info(log_line)
+        if pair == self.pair:
+            maker = executed.args.maker.hex()
+            taker = executed.args.taker.hex()
+            price = Decimal(executed.args.price) / 10 ** self.dexalot.quote_decimals
+            amount = Decimal(executed.args.quantity) / 10 ** self.dexalot.base_decimals
+            fee_maker = Decimal(executed.args.feeMaker) / 10 ** self.dexalot.quote_decimals
+            fee_taker = Decimal(executed.args.feeTaker) / 10 ** self.dexalot.quote_decimals
+
+            log_line = f"EXECUTED on {pair}. Price: {price} {self.dexalot.quote_symbol}. Amount: {amount} {self.dexalot.base_symbol}." + '\n'
+            log_line += f"Maker: {maker} (fee paid: {fee_maker}). Taker: {taker} (fee_paid: {fee_taker})"
+            logger.info(log_line)
 
     def cancel_all_transaction(self):
         order_id_list = []
@@ -273,6 +265,16 @@ class MarketMaker:
             for executed in event_filter.get_new_entries():
                 self.handler_executed(executed)
                 await asyncio.sleep(poll_interval)
+
+    async def run_additional_state_update(self):
+        while True:
+            # Update the market state and then our orders
+            await asyncio.sleep(self.additional_state_update)
+            try:
+                self.update_state()
+                self.update_orders()
+            except Exception as e:
+                logger.error(f"Could not update orders due to: {e}")
 
     def calculate_mid(self, bid_price: Decimal, ask_price: Decimal) -> Decimal:
         if (bid_price == 0) and (ask_price == 0):
