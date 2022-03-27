@@ -1,6 +1,7 @@
+import os
+
 from web3 import HTTPProvider, Web3
 from web3.middleware import geth_poa_middleware
-import os
 
 from web3_utils import register_private_key
 
@@ -38,13 +39,13 @@ def init_config():
     config['trade_pair'] = 'TEAM2/AVAX'
 
     # MM Config
-    config['default_mid_price'] = 20            # Default mid price if no market
-    config['order_price_tolerance'] = 0.005     # Tolerance when comparing order prices (0.5% = 0.005) used to decrease fees moving orders each time best bid/ask move
-    config['order_amount_tolerance'] = 0.2      # Tolernace when comparing order amounts (20% = 0.2). Order size is replensished when order falls below this threshold
+    config['default_mid_price'] = 20  # Default mid price if no market
+    config['order_price_tolerance'] = 0.005  # Tolerance when comparing order prices (0.5% = 0.005) used to decrease fees moving orders each time best bid/ask move
+    config['order_amount_tolerance'] = 0.2  # Tolernace when comparing order amounts (20% = 0.2). Order size is replensished when order falls below this threshold
     config['default_amount'] = 5
-    config['target_spread'] = 1                 # Target spread - can vary slightly due to the existing order tolerance
+    config['target_spread'] = 1  # Target spread - can vary slightly due to the existing order tolerance
     config['n_price_levels'] = 5
     config['n_agg_orders'] = 50
-    config['additional_state_update'] = 60      # Additional state update incase events are missed or out of sync
+    config['additional_state_update'] = 60  # Additional state update incase events are missed or out of sync
 
     return config

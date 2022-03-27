@@ -2,9 +2,10 @@ import asyncio
 import datetime
 import time
 from decimal import Decimal
+from random import randrange
+
 from web3 import Web3
 
-from config import init_config
 from dexalot import Dexalot
 from enums import OrderSide, OrderType, OrderStatus
 from logger import get_logger
@@ -17,6 +18,7 @@ class MarketMaker:
     def __init__(self, config):
 
         # MM Params
+        self.dexalot = None
         self.config = config
         self.pair = config['trade_pair']
         self.target_spread = Decimal(config['target_spread'])
@@ -43,7 +45,7 @@ class MarketMaker:
 
         # Initialize Dexalot Exchange Handler
         self.dexalot = Dexalot(base_url=self.config['base_url'], trade_pair=self.config['trade_pair'],
-                               web3=self.config['web3'], trader_address=config['trader_address'],
+                               web3=self.config['web3'], trader_address=self.config['trader_address'],
                                timeout=self.config['timeout'])
         self.dexalot.initialize()
         log_line = '\n' + 50 * '-' + '\n'
@@ -71,14 +73,18 @@ class MarketMaker:
         self.update_orders()
 
         # Start event loops
-        order_status_event_filter = self.dexalot.trade_pairs_contract.events.OrderStatusChanged.createFilter(fromBlock='latest')
+        order_status_event_filter = self.dexalot.trade_pairs_contract.events.OrderStatusChanged.createFilter(
+            fromBlock='latest')
         executed_event_filter = self.dexalot.trade_pairs_contract.events.Executed.createFilter(fromBlock='latest')
 
         event_loop.create_task(self.run_order_status_changed_listener(order_status_event_filter, 2))
         event_loop.create_task(self.run_executed_listener(executed_event_filter, 2))
         await self.run_additional_state_update()
 
-    def update_orders(self):
+    def update_orders(self, random=False):
+
+        if random:
+            self.mid_price = self.mid_price + Decimal(randrange(-10, 10) / 10)
 
         bid_price, ask_price = self.calculate_order_prices()
         bid_amount, ask_amount = self.calculate_order_amounts()
@@ -125,7 +131,8 @@ class MarketMaker:
         amount_tolerance = self.order_amount_tolerance
         return len(orders) == 0 or not all(
             [(self.within_tolerance(price, Decimal(order['price']), self.order_price_tolerance)
-              and self.within_tolerance(quantity, (Decimal(order['quantity']) - Decimal(order['quantityfilled'])), self.order_amount_tolerance))
+              and self.within_tolerance(quantity, (Decimal(order['quantity']) - Decimal(order['quantityfilled'])),
+                                        self.order_amount_tolerance))
              for order in orders])
 
     def update_state(self):
@@ -178,7 +185,8 @@ class MarketMaker:
             if traderaddress == self.dexalot.trade_address:
                 # Fetch the new world state and update our orders
                 if order_status == OrderStatus.FILLED:
-                    filled_quantity = Decimal(order_status_changed.args.quantityfilled) / 10 ** self.dexalot.quote_decimals
+                    filled_quantity = Decimal(
+                        order_status_changed.args.quantityfilled) / 10 ** self.dexalot.quote_decimals
                     logger.info(f"Order {id} FILLED {filled_quantity}/{filled_quantity} {self.dexalot.quote_symbol}")
                     update_orders = True
 
@@ -188,10 +196,12 @@ class MarketMaker:
                     self.update_orders()
                 # Check remaining amount after partial fill and replenish order if over tolerance
                 elif order_status == OrderStatus.PARTIAL:
-                    filled_quantity = Decimal(order_status_changed.args.quantityfilled) / 10 ** self.dexalot.base_decimals
+                    filled_quantity = Decimal(
+                        order_status_changed.args.quantityfilled) / 10 ** self.dexalot.base_decimals
                     total_quantity = Decimal(order_status_changed.args.quantity) / 10 ** self.dexalot.base_decimals
                     remaining_quantity = total_quantity - filled_quantity
-                    logger.info(f"Order {id} PARTIAL FILL {filled_quantity}/{total_quantity} {self.dexalot.base_symbol}")
+                    logger.info(
+                        f"Order {id} PARTIAL FILL {filled_quantity}/{total_quantity} {self.dexalot.base_symbol}")
                     bid_amount, ask_amount = self.calculate_order_amounts()
 
                     if order_side == OrderSide.BUY:
@@ -246,6 +256,12 @@ class MarketMaker:
         log_line += f"Maker: {maker} (fee paid: {fee_maker}). Taker: {taker} (fee_paid: {fee_taker})"
         logger.info(log_line)
 
+    def cancel_all_transaction(self):
+        order_id_list = []
+        for order in self.open_orders:
+            order_id_list.append(order['id'])
+        self.dexalot.cancel_all_orders(self.pair, order_id_list)
+
     async def run_order_status_changed_listener(self, event_filter, poll_interval):
         while True:
             for order_status_changed in event_filter.get_new_entries():
@@ -268,14 +284,3 @@ class MarketMaker:
 
     def get_nanos(self) -> int:
         return int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 10 ** 9)
-
-
-async def run_market_maker(config, loop):
-    market_maker = MarketMaker(config)
-    await market_maker.run(loop)
-
-
-if __name__ == '__main__':
-    config = init_config()
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(run_market_maker(config, loop))

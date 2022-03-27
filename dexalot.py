@@ -1,12 +1,12 @@
-import asyncio
-import requests
-import web3.eth
 import json
-from enums import OrderSide, OrderType, OrderStatus
-from config import init_config, extract_environment_variable
-from web3 import Web3
-from logger import get_logger
 from decimal import Decimal
+
+import requests
+from web3 import Web3
+
+from config import extract_environment_variable
+from enums import OrderSide, OrderType
+from logger import get_logger
 
 logger = get_logger("dexalot_exchange")
 
@@ -37,6 +37,7 @@ class Dexalot:
         self.trade_pairs_contract = None
         self.orderbooks_contract = None
         self.timeout = timeout
+        self.retries = 0
 
     def initialize(self):
 
@@ -47,28 +48,32 @@ class Dexalot:
         self.base_display_decimals = int(pair_data['basedisplaydecimals'])
         self.quote_display_decimals = int(pair_data['quotedisplaydecimals'])
         self.base_address = self.web3.toChecksumAddress(pair_data['baseaddress'])
-        self.quote_address = self.web3.toChecksumAddress(pair_data['quoteaddress']) if pair_data['quoteaddress'] else None
+        self.quote_address = self.web3.toChecksumAddress(pair_data['quoteaddress']) if pair_data[
+            'quoteaddress'] else None
         self.min_trade_amount = float(pair_data['mintrade_amnt'])
         self.max_trade_amount = float(pair_data['maxtrade_amnt'])
         self.base_decimals = int(pair_data['base_evmdecimals'])
         self.quote_decimals = int(pair_data['quote_evmdecimals'])
         logger.info(f"Retrieved pair reference data for {self.trade_pair}: {pair_data}")
 
-        # # Initialize Exchange Contract
-        # contract_info = self.fetch_contract_and_abi(deployment_type="Exchange")
-        # self.exchange_contract = self.web3.eth.contract(address=contract_info["address"], abi=contract_info["abi"]["abi"])
+        # Initialize Exchange Contract
+        contract_info = self.fetch_contract_and_abi(deployment_type="Exchange")
+        self.exchange_contract = self.web3.eth.contract(address=contract_info["address"], abi=contract_info["abi"]["abi"])
 
         # Initialize Portfolio Contract
         contract_info = self.fetch_contract_and_abi(deployment_type="Portfolio")
-        self.portfolio_contract = self.web3.eth.contract(address=contract_info["address"], abi=contract_info["abi"]["abi"])
+        self.portfolio_contract = self.web3.eth.contract(address=contract_info["address"],
+                                                         abi=contract_info["abi"]["abi"])
 
         # Initialize TradePairs Contract
         contract_info = self.fetch_contract_and_abi(deployment_type="TradePairs")
-        self.trade_pairs_contract = self.web3.eth.contract(address=contract_info["address"], abi=contract_info["abi"]["abi"])
+        self.trade_pairs_contract = self.web3.eth.contract(address=contract_info["address"],
+                                                           abi=contract_info["abi"]["abi"])
 
         # Initialize Orderbook Contract
         contract_info = self.fetch_contract_and_abi(deployment_type="OrderBooks")
-        self.orderbooks_contract = self.web3.eth.contract(address=contract_info["address"], abi=contract_info["abi"]["abi"])
+        self.orderbooks_contract = self.web3.eth.contract(address=contract_info["address"],
+                                                          abi=contract_info["abi"]["abi"])
         logger.info("All contracts have been initialized and ready to trade")
 
     def deposit_token(self, quantity: Decimal, is_base=True):
@@ -92,7 +97,7 @@ class Dexalot:
                 'chainId': self.web3.eth.chainId,
                 'nonce': self.web3.eth.get_transaction_count(self.web3.eth.default_account),
                 'gas': 200000,
-                'gasPrice': web3.toWei('100', 'gwei'),
+                'gasPrice': self.web3.toWei('100', 'gwei'),
             }
             signed_txn = self.web3.eth.account.sign_transaction(txn, private_key=extract_environment_variable('PRIVATE_KEY'))
             txn = self.web3.eth.send_raw_transaction(signed_txn.rawTransaction)
@@ -175,26 +180,65 @@ class Dexalot:
         ask_book = self.orderbooks_contract.functions.getNOrders(ask_book_id, price_levels, aggregated_orders, 0, b'', 0).call()
         return bid_book[:2], ask_book[:2]
 
-    def add_order(self, trade_pair_id, price: Decimal, base_amount: Decimal, order_side: OrderSide, order_type: OrderType):
+    def estimate_gas_for_txn(self, txn):
+
+        gas_amount = txn.estimateGas()
+        gas_price = self.web3.eth.gasPrice
+        gas_cost = Decimal(gas_price * gas_amount) / 10 ** 18
+        return gas_cost
+
+    def add_order(self, trade_pair_id, price: Decimal, base_amount: Decimal, order_side: OrderSide,
+                  order_type: OrderType):
 
         quote_amount = base_amount * price
         if (quote_amount < self.min_trade_amount) or (quote_amount > self.max_trade_amount):
-            logger.info(f"Order size {quote_amount:.3f} {self.quote_symbol} must be between {self.min_trade_amount} and {self.max_trade_amount}")
+            logger.info(
+                f"Order size {quote_amount:.3f} {self.quote_symbol} must be between {self.min_trade_amount} and {self.max_trade_amount}")
             return None
 
-        price_norm = int(round(price, self.quote_display_decimals)*10**self.quote_decimals)
-        base_amount_norm = int(round(base_amount, self.base_display_decimals)*10**self.base_decimals)
+        price_norm = int(round(price, self.quote_display_decimals) * 10 ** self.quote_decimals)
+        base_amount_norm = int(round(base_amount, self.base_display_decimals) * 10 ** self.base_decimals)
         trade_pair_id_bytes = bytes(trade_pair_id, 'utf-8')
-        order_txn = self.trade_pairs_contract.functions.addOrder(trade_pair_id_bytes, price_norm, base_amount_norm, order_side.value, order_type.value).transact()
-        logger.info(f"Placed {repr(order_type)} {repr(order_side)} Order. Price {price:.4f}. Size {base_amount:.4f} {self.base_symbol}")
-        return order_txn
+
+        # Build transaction, estimate gas and place order
+        order_txn = self.trade_pairs_contract.functions.addOrder(trade_pair_id_bytes, price_norm, base_amount_norm,
+                                                                 order_side.value, order_type.value)
+        gas_estimate = self.estimate_gas_for_txn(order_txn)
+        logger.info(f"Placing Order Gas Estimate: {gas_estimate} AVAX")
+        # TODO: Add logic for placing transaction if profit > gas
+        txn_hash = order_txn.transact()
+
+        # Wait for transaction receipt
+        txn_receipt = self.web3.eth.wait_for_transaction_receipt(txn_hash, timeout=60)
+        if txn_receipt['status'] == 1:
+            logger.info(
+                f"SUCCESS - Placing {repr(order_type)} {repr(order_side)} Order. Price {price:.4f}. Size {base_amount:.4f} {self.base_symbol}")
+        elif txn_receipt['status'] == 0:
+            logger.warning(
+                f"FAILED - Placing {repr(order_type)} {repr(order_side)} Order. Price {price:.4f}. Size {base_amount:.4f} {self.base_symbol}")
+        elif txn_receipt is None:
+            logger.warning(f"FAILED - Placing transaction was not mined")
+
+        return txn_receipt
 
     def cancel_order(self, trade_pair_id: str, order_id: str):
         # Strip 0x from order_id string and convert to bytes
         order_id_bytes = bytes.fromhex(order_id[2:])
         trade_pair_id_bytes = bytes(trade_pair_id, 'utf-8')
-        self.trade_pairs_contract.functions.cancelOrder(trade_pair_id_bytes, order_id_bytes).transact()
-        logger.info(f"Cancelled {order_id}")
+
+        cancel_order_txn = self.trade_pairs_contract.functions.cancelOrder(trade_pair_id_bytes, order_id_bytes)
+        gas_estimate = self.estimate_gas_for_txn(cancel_order_txn)
+        logger.info(f"Cancel Order Gas Estimate: {gas_estimate} AVAX")
+        txn_hash = cancel_order_txn.transact()
+
+        # Wait for transaction receipt
+        txn_receipt = self.web3.eth.wait_for_transaction_receipt(txn_hash, timeout=60)
+        if txn_receipt['status'] == 1:
+            logger.info(f"SUCCESS - Cancelled {order_id}")
+        elif txn_receipt['status'] == 0:
+            logger.warning(f"FAILED - Cancelling {order_id}")
+        elif txn_receipt is None:
+            logger.warning(f"FAILED - Cancelling transaction was not mined")
 
     def cancel_all_orders(self, trade_pair_id: str, order_id_list: list):
         # Strip 0x from order_ids and convert to bytes
@@ -205,8 +249,19 @@ class Dexalot:
             order_id_bytes = bytes.fromhex(order_id[2:])
             order_id_bytes_list.append(order_id_bytes)
 
-        self.trade_pairs_contract.functions.cancelAllOrders(trade_pair_id, order_id_bytes_list).transact()
-        logger.info(f"Cancelled All Orders")
+        cancel_orders_txn = self.trade_pairs_contract.functions.cancelAllOrders(trade_pair_id, order_id_bytes_list)
+        gas_estimate = self.estimate_gas_for_txn(cancel_orders_txn)
+        logger.info(f"Cancel Orders Gas Estimate: {gas_estimate} AVAX")
+        txn_hash = cancel_orders_txn.transact()
+
+        # Wait for transaction receipt
+        txn_receipt = self.web3.eth.wait_for_transaction_receipt(txn_hash, timeout=60)
+        if txn_receipt['status'] == 1:
+            logger.info(f"SUCCESS - Cancelled {order_id_list}")
+        elif txn_receipt['status'] == 0:
+            logger.warning(f"FAILED - Cancelling {order_id_list}")
+        elif txn_receipt is None:
+            logger.warning(f"FAILED - Cancelling transaction was not mined")
 
     def _request_dexalot(self, path, query=None, params=None, timeout=None, max_retries=None):
 
@@ -227,21 +282,6 @@ class Dexalot:
             logger.warning("Timed out on request: %s (%s), retrying..." % (path, json.dumps(params or '')))
             return retry()
 
+        self.retries = 0
+
         return json.loads(response.text)
-
-
-if __name__ == "__main__":
-
-    config = init_config()
-
-    pair = config['trade_pair']
-    web3 = config['web3']
-    trader_address = config['trader_address']
-
-    base_url = "https://api.dexalot-dev.com/api/"
-    exchange_handler = Dexalot(base_url, trade_pair=pair, web3=web3, trader_address=trader_address, timeout=None)
-
-    exchange_handler.initialize()
-
-    receipt = exchange_handler.deposit_token(quantity=Decimal(1), is_base=False)
-    print(receipt)

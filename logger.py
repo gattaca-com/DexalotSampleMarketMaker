@@ -1,7 +1,7 @@
 import logging
 import os
 
-FORMAT = logging.Formatter('%(asctime)s [%(threadName)s %(module)s %(lineno)d] %(levelname)s: %(message)s')
+FORMAT = logging.Formatter('%(asctime)s [%(module)s %(lineno)d] %(levelname)s: %(message)s')
 
 
 def get_logger(name):
