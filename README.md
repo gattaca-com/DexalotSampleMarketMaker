@@ -1,6 +1,7 @@
+# Dexalot Sample Market Maker
 - [Dexalot Sample Market Maker](#dexalot-sample-market-maker)
   - [Market Making Contest](#market-making-contest)
-    - [Our Info](#our-info)
+    - [Info](#info)
     - [Challenges](#challenges)
     - [Bonus Challenges:](#bonus-challenges)
   - [Solutions](#solutions)
@@ -8,13 +9,13 @@
     - [Market Maker Configuration](#market-maker-configuration)
     - [Market Maker Workflow and Functionality](#market-maker-workflow-and-functionality)
     - [TODO and Improvements](#todo-and-improvements)
-# Dexalot Sample Market Maker
+
 ## Market Making Contest
 * Each team will be assigned a token and will be market making it against AVAX in Dexalot's Dev environment. i,e TEAM1/AVAX will be the first team's pair. We will send the funds to you.
-*Team's will not market make against each other for this challenge.
-*Start with depositing your tokens from the frontend (See bonus items)
+* Team's will not market make against each other for this challenge.
+* Start with depositing your tokens from the frontend (See bonus items)
 
-### Our Info
+### Info
 * TEAM2 Address: 0x92BbD24434e0dF6c609Ba37f5Fb69EB0eF81cFF6
 * Trading Pair: TEAM2/AVAX
 * Start Balance: 20,000 TEAM2 & 5000 AVAX
