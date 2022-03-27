@@ -1,3 +1,13 @@
+- [Dexalot Sample Market Maker](#dexalot-sample-market-maker)
+  - [Market Making Contest](#market-making-contest)
+    - [Our Info](#our-info)
+    - [Challenges](#challenges)
+    - [Bonus Challenges:](#bonus-challenges)
+  - [Solutions](#solutions)
+    - [Exchange Handler Config](#exchange-handler-config)
+    - [Market Maker Configuration](#market-maker-configuration)
+    - [Market Maker Workflow and Functionality](#market-maker-workflow-and-functionality)
+    - [TODO and Improvements](#todo-and-improvements)
 # Dexalot Sample Market Maker
 ## Market Making Contest
 * Each team will be assigned a token and will be market making it against AVAX in Dexalot's Dev environment. i,e TEAM1/AVAX will be the first team's pair. We will send the funds to you.
