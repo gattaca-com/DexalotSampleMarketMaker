@@ -78,7 +78,7 @@ class MarketMaker:
         executed_event_filter = self.dexalot.trade_pairs_contract.events.Executed.createFilter(fromBlock='latest')
 
         event_loop.create_task(self.run_order_status_changed_listener(order_status_event_filter, 2))
-        event_loop.create_task(self.run_executed_listener(executed_event_filter, 2))
+        # event_loop.create_task(self.run_executed_listener(executed_event_filter, 2))
         await self.run_additional_state_update()
 
     def update_orders(self, random=False):
