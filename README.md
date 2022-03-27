@@ -26,7 +26,32 @@
 11. Deposit tokens into Dexalot Portfolio programmatically. **(5 points)** 
 12. Get gas cost of each order and log it before in order to make buy/sell decisions with t-cost in mind (and console.log it). **(10 points)**
 
-## Solution
-`demo_script.py` is a simple demo script that performs the actions outlined in challenges `1-7`, `10` and `11`. To run, set your `PRIVATE_KEY` in the environment variables.
+## Solutions
+To run either solution, set your `PRIVATE_KEY` in the environment variables.
 
-`market_maker.py`
+`demo_script.py` is a simple demo script that performs the actions outlined in challenges `1-7`, `10` and `11`. 
+
+`market_maker.py` is a simple market maker implementation that aims to complete all challenges `1-12`. The market maker can be configured via `config.py`.
+
+### Exchange Handler Config
+```
+base_url - Base url of the Dexalot REST API (https://api.dexalot-dev.com/api/)
+timeout - Timeout interval for API requests in seconds
+trade_pair - Pair to be traded (TEAM2/AVAX)
+```
+
+### Market Maker Configuration
+```
+default_mid_price - Default mid price if no orders are present in the orderbook
+default_amount - Default trade amount in base asset
+order_price_tolerance - Tolerance used when comparing desired order prices with current order prices (0.5% = 0.005).
+                      - Orders will only be moved when this tolerance is exceeded to reduce order placement turnover, hence, reducing fees paid.
+                      - Should be set to a low value to reduce spread drift.
+order_amount_tolerance - Tolerance used when comparing desired order size with current order size (20% = 0.2).
+                       - Orders will only be moved when this tolerance is exceeded to reduce order placement turnover, hence, reducing fees paid
+                       - A lower value means the MM will replenish partially filled LIMIT orders sooner.
+target_spread - Target spread (this can vary slightly due to order_price_tolerance)
+n_price_levels - Number of orderbook price levels to fetch.
+n_agg_orders - Number of orders to aggregate across n_price_levels.
+additional_state_update - Additional state update incase events are missed or out of sync
+```
