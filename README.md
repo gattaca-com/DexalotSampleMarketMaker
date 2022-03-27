@@ -41,7 +41,7 @@ To run either solution install requirements and set your `PRIVATE_KEY` in the en
 
 `demo_script.py` is a simple demo script that performs the actions outlined in challenges `1-7`, `10` and `11`. 
 
-`market_maker.py` is a simple market maker implementation that aims to complete all challenges `1-12`. The market maker can be configured via `config.py`.
+`market_maker.py` is a simple market maker implementation that aims to complete all challenges `1-12`. The market maker can be configured via `config.py` and run through `main.py`.
 
 ### Exchange Handler Config
 * base_url - Base url of the Dexalot REST API (https://api.dexalot-dev.com/api/)
