@@ -29,7 +29,7 @@
 6. Wait ~20 seconds and enter a new set of buy & sell orders  with different prices based on the changing mid/last price  against the contracts. **(20 points)**
 7. Wait ~30 seconds and CancelAll all your open orders using CancelAll against the contracts. **(15 points)**
 
-### Bonus Challenges:
+### Bonus Challenges
 8. Listen to OrderUpdate Events. We will enter an order that will fill one of your orders and your code have to react by entering a new order in about ~10 seconds after the fill. **(10 points)**
 9. Listen to Executed Events and react to it as above. **(10 points)**
 10. Read the orderbook from the contracts and console.log it. **(10 points)**
