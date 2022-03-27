@@ -22,7 +22,7 @@ class MarketMaker:
         self.target_spread = Decimal(config['target_spread'])
         self.order_price_tolerance = Decimal(config['order_price_tolerance'])
         self.order_amount_tolerance = Decimal(config['order_amount_tolerance'])
-        self.update_order_frequency = config['update_order_frequency']
+        self.additional_state_update = config['additional_state_update']
         self.n_price_levels = int(config['n_price_levels'])
         self.n_agg_orders = int(config['n_agg_orders'])
 
@@ -75,10 +75,8 @@ class MarketMaker:
         executed_event_filter = self.dexalot.trade_pairs_contract.events.Executed.createFilter(fromBlock='latest')
 
         event_loop.create_task(self.run_order_status_changed_listener(order_status_event_filter, 2))
-        # await self.run_order_status_changed_listener(order_status_event_filter, 2)
-        await event_loop.create_task(self.run_executed_listener(executed_event_filter, 2))
-        # event_loop.create_task(self.run_update_orders_loop())
-        # await self.run_update_orders_loop()
+        event_loop.create_task(self.run_executed_listener(executed_event_filter, 2))
+        await self.run_additional_state_update()
 
     def update_orders(self):
 
@@ -92,7 +90,7 @@ class MarketMaker:
                 self.dexalot.cancel_order(self.pair, order['id'])
             self.dexalot.add_order(self.pair, bid_price, bid_amount, OrderSide.BUY, OrderType.LIMIT)
 
-        time.sleep(1)
+        time.sleep(2)
 
         sell_orders = [order for order in self.open_orders if order['side'] == OrderSide.SELL.value]
         if self.orders_require_action(sell_orders, ask_price, ask_amount):
@@ -155,10 +153,10 @@ class MarketMaker:
         log_line += f"Mid Price {self.mid_price} {self.dexalot.quote_symbol}" + '\n' + 50 * '-'
         logger.info(log_line)
 
-    async def run_update_orders_loop(self):
+    async def run_additional_state_update(self):
         while True:
             # Update the market state and then our orders
-            await asyncio.sleep(self.update_order_frequency)
+            await asyncio.sleep(self.additional_state_update)
             try:
                 self.update_state()
                 self.update_orders()
@@ -167,7 +165,6 @@ class MarketMaker:
 
     def handle_order_status_changed(self, order_status_changed):
 
-        # AttributeDict({'args': AttributeDict({'traderaddress': '0x53c7a6B548510c63C786Fac48BCc1FFd2db44CBc', 'pair': b'TEAM1/AVAX\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00', 'id': b'\xc0\x9a\x06D%\x86\xdf\xf5L\xc8y ,\x9b>(3\x07\xca\xd0U\xd4 \x89\xd9\xe8\x13\xb3>5\xae\xf9', 'price': 9000000000000000000, 'totalamount': 45000000000000000000, 'quantity': 10000000000000000000, 'side': 0, 'type1': 1, 'status': 2, 'quantityfilled': 5000000000000000000, 'totalfee': 0}), 'event': 'OrderStatusChanged', 'logIndex': 5, 'transactionIndex': 0, 'transactionHash': HexBytes('0x2f208a833d36b4ccc807b159c1599833e62d0401414067df6bdc0bc1e64177fa'), 'address': '0x8664EFa775aBf51aD5b2a179E088efF5AF477c73', 'blockHash': HexBytes('0xb13a71fc7c681e0cf437f64d716c28c5e926a533f5ed87d6f208fe576c757e0a'), 'blockNumber': 18693})
         pair = Web3.toText(order_status_changed.args.pair).split(str(b'\x00', 'utf8'))[0]
         id = order_status_changed.args.id.hex()
         order_status = OrderStatus(order_status_changed.args.status)
@@ -233,6 +230,22 @@ class MarketMaker:
                 self.update_state()
                 self.update_orders()
 
+    def handler_executed(self, executed):
+        """Current logic can all be handled via OrderStatusChanged events which are emitted alongside Executed events.
+        Executed events could be used to determine useful features such as order aggressor that can be used to adjust skew/spread"""
+
+        pair = Web3.toText(executed.args.pair).split(str(b'\x00', 'utf8'))[0]
+        maker = executed.args.maker.hex()
+        taker = executed.args.taker.hex()
+        price = Decimal(executed.args.price) / 10 ** self.dexalot.quote_decimals
+        amount = Decimal(executed.args.quantity) / 10 ** self.dexalot.base_decimals
+        fee_maker = Decimal(executed.args.feeMaker) / 10 ** self.dexalot.quote_decimals
+        fee_taker = Decimal(executed.args.feeTaker) / 10 ** self.dexalot.quote_decimals
+
+        log_line = f"EXECUTED on {pair}. Price: {price} {self.dexalot.quote_symbol}. Amount: {amount} {self.dexalot.base_symbol}." + '\n'
+        log_line += f"Maker: {maker} (fee paid: {fee_maker}). Taker: {taker} (fee_paid: {fee_taker})"
+        logger.info(log_line)
+
     async def run_order_status_changed_listener(self, event_filter, poll_interval):
         while True:
             for order_status_changed in event_filter.get_new_entries():
@@ -242,7 +255,7 @@ class MarketMaker:
     async def run_executed_listener(self, event_filter, poll_interval):
         while True:
             for executed in event_filter.get_new_entries():
-                print(executed)
+                self.handler_executed(executed)
                 await asyncio.sleep(poll_interval)
 
     def calculate_mid(self, bid_price: Decimal, ask_price: Decimal) -> Decimal:

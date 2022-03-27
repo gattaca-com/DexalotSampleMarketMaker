@@ -45,6 +45,6 @@ def init_config():
     config['target_spread'] = 1                 # Target spread - can vary slightly due to the existing order tolerance
     config['n_price_levels'] = 5
     config['n_agg_orders'] = 50
-    config['update_order_frequency'] = 10       # How often to update the state and orders in seconds
+    config['additional_state_update'] = 60      # Additional state update incase events are missed or out of sync
 
     return config

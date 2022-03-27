@@ -24,7 +24,7 @@
 Bonus:
 
 ~~- Listen to OrderUpdate Events. We will enter an order that will fill one of your orders and your code have to react by entering a new order in about ~10 seconds after the fill. **(10 points)**~~
-- Listen to Executed Events and react to it as above. **(10 points)**
+~~- Listen to Executed Events and react to it as above. **(10 points)**~~
 ~~- Read the orderbook from the contracts and console.log it. **(10 points)**~~
 - Deposit tokens into Dexalot Portfolio programmatically. **(5 points)** 
 - Get gas cost of each order and log it before in order to make buy/sell decisions with t-cost in mind (and console.log it). **(10 points)**

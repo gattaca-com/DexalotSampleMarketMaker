@@ -3,7 +3,7 @@ import requests
 import web3.eth
 import json
 from enums import OrderSide, OrderType, OrderStatus
-from config import init_config
+from config import init_config, extract_environment_variable
 from web3 import Web3
 from logger import get_logger
 from decimal import Decimal
@@ -57,10 +57,10 @@ class Dexalot:
         # # Initialize Exchange Contract
         # contract_info = self.fetch_contract_and_abi(deployment_type="Exchange")
         # self.exchange_contract = self.web3.eth.contract(address=contract_info["address"], abi=contract_info["abi"]["abi"])
-        #
-        # # Initialize Portfolio Contract
-        # contract_info = self.fetch_contract_and_abi(deployment_type="Portfolio")
-        # self.portfolio_contract = self.web3.eth.contract(address=contract_info["address"], abi=contract_info["abi"]["abi"])
+
+        # Initialize Portfolio Contract
+        contract_info = self.fetch_contract_and_abi(deployment_type="Portfolio")
+        self.portfolio_contract = self.web3.eth.contract(address=contract_info["address"], abi=contract_info["abi"]["abi"])
 
         # Initialize TradePairs Contract
         contract_info = self.fetch_contract_and_abi(deployment_type="TradePairs")
@@ -70,6 +70,35 @@ class Dexalot:
         contract_info = self.fetch_contract_and_abi(deployment_type="OrderBooks")
         self.orderbooks_contract = self.web3.eth.contract(address=contract_info["address"], abi=contract_info["abi"]["abi"])
         logger.info("All contracts have been initialized and ready to trade")
+
+    def deposit_token(self, quantity: Decimal, is_base=True):
+
+        deposit_token = self.base_symbol if is_base else self.quote_symbol
+        logger.info(f"Depositing {quantity} {deposit_token}")
+        trade_pair = bytes(self.trade_pair, 'utf8')
+        trader_address = Web3.toChecksumAddress(self.trade_address)
+        quantity = int(quantity * 10 ** self.quote_decimals)
+        deposit_token = self.trade_pairs_contract.functions.getSymbol(trade_pair, is_base).call()
+
+        if is_base:
+            txn = self.portfolio_contract.functions.depositToken(trader_address, deposit_token, quantity).transact()
+            txn_receipt = self.web3.eth.wait_for_transaction_receipt(txn)
+        else:
+            # Send directly to the contract as AVAX fails check in tokenList.contains(_symbol)
+            # https://github.com/Dexalot/contracts/blob/8d4aa94e6b05ac2a4df7ede6f03c94e1bf3b5831/contracts/Portfolio.sol#L272
+            txn = {
+                'to': self.portfolio_contract.address,
+                'value': quantity,
+                'chainId': self.web3.eth.chainId,
+                'nonce': self.web3.eth.get_transaction_count(self.web3.eth.default_account),
+                'gas': 200000,
+                'gasPrice': web3.toWei('100', 'gwei'),
+            }
+            signed_txn = self.web3.eth.account.sign_transaction(txn, private_key=extract_environment_variable('PRIVATE_KEY'))
+            txn = self.web3.eth.send_raw_transaction(signed_txn.rawTransaction)
+            txn_receipt = self.web3.eth.wait_for_transaction_receipt(txn)
+
+        return txn_receipt
 
     def fetch_tokens(self) -> list:
 
@@ -214,52 +243,5 @@ if __name__ == "__main__":
 
     exchange_handler.initialize()
 
-    start_mid = 100
-    spread = 1
-
-    buy_price = Decimal(start_mid - (spread / 2))
-    sell_price = Decimal(start_mid + spread / 2)
-    amount = Decimal(0.3)
-
-    # order = exchange_handler.place_order(b"TEAM2/AVAX", buy_price, amount, OrderSide.BUY, OrderType.LIMIT)
-    # order = exchange_handler.place_order(b"TEAM2/AVAX", sell_price, amount, OrderSide.SELL, OrderType.LIMIT)
-
-    # TODO: These trades need to be added to a local hashmap
-    open_orders = exchange_handler.fetch_open_orders()
-    order_id_list = []
-    log_line = '\n'
-    for order in open_orders:
-        log_line += str(order) + '\n'
-        order_id_list.append(order['id'])
-    logger.info(log_line)
-
-    # Cancel Open Orders
-    # for order in open_orders:
-    #exchange_handler.trade_pairs_contract.functions.cancelOrder(b'TEAM2/AVAX', bytes.fromhex('7a79149d7007889f9f3a3026d33f2c5f30c578b6202a702cd9d857b019be1e07')).transact()
-    #exchange_handler.cancel_order(trade_pair_id='TEAM2/AVAX'.encode('utf-8'), order_id='0xf12f1d30b016670dd0b841596b9deec6013171f577ee0fdbaa3a1251cab4c59f'.encode('utf-8'))
-
-    order = exchange_handler.fetch_order_status("0x5a690fc9661bfeabfef57612d5d188890cfc171f61791ace6bfccbf359166613")
-
-    bid_book, ask_book = exchange_handler.fetch_orderbook(2, 50)
-    print(bid_book)
-    print(ask_book)
-    exchange_handler.fetch_best_bid_and_ask()
-
-    last = exchange_handler.orderbooks_contract.functions.last(b'TEAM2/AVAX-BUYBOOK').call()
-    print(last)
-    # exchange_handler.cancel_all_orders(trade_pair_id='TEAM2/AVAX', order_id_list=order_id_list)
-
-    # exchange_handler.event_listener()
-
-    # exchange_contract = exchange_handler.fetch_contract_and_abi("Exchange")
-    # print(exchange_contract)
-    # portfolio_contract = exchange_handler.fetch_contract_and_abi("Portfolio")
-    # print(portfolio_contract)
-    # trade_pairs_contract = exchange_handler.fetch_contract_and_abi("TradePairs")
-    # print(trade_pairs_contract)
-    # orderbooks_contract = exchange_handler.fetch_contract_and_abi("OrderBooks")
-    # print(orderbooks_contract)
-    #
-    # orderbooks_contract = exchange_handler.fetch_contract_and_abi("tes")
-    # print(orderbooks_contract)
-
+    receipt = exchange_handler.deposit_token(quantity=Decimal(1), is_base=False)
+    print(receipt)
